@@ -1,0 +1,42 @@
+#!/bin/bash
+
+function create_template() {
+    
+    echo "Creating template $2 ($1)"
+
+    qm create $1 --name $2 --ostype l26 
+    qm set $1 --net0 virtio,bridge=vmbr0
+    qm set $1 --serial0 socket --vga serial0
+    qm set $1 --memory 2048 --cores 2 --cpu host
+    qm set $1 --scsi0 ${storage}:0,import-from="$(pwd)/$3",discard=on
+    qm set $1 --boot order=scsi0 --scsihw virtio-scsi-single
+    qm set $1 --agent enabled=1,fstrim_cloned_disks=1
+    qm set $1 --ide2 ${storage}:cloudinit
+    qm set $1 --ipconfig0 "ip6=auto,ip=dhcp"
+    qm set $1 --sshkeys ${ssh_keyfile}
+    qm set $1 --ciuser ${username}
+    qm disk resize $1 scsi0 8G
+    qm template $1
+    rm $3
+
+}
+
+export ssh_keyfile=$PWD/authorized_keys
+export username=serveradmin
+
+if [[ $HOSTNAME == "titan" ]]; then
+    export storage=vm-storage
+else
+    export storage=local-lvm
+fi
+
+## Fetch SSH keys
+wget https://raw.githubusercontent.com/fredrikscode/sshkeys/main/authorized_keys
+
+## AlmaLinux
+#9.1 GenericCloud
+wget https://repo.almalinux.org/almalinux/9.1/cloud/x86_64/images/AlmaLinux-9-GenericCloud-latest.x86_64.qcow2
+create_template 5000 "alma-9" "AlmaLinux-9-GenericCloud-latest.x86_64.qcow2"
+#8.7
+wget https://repo.almalinux.org/almalinux/8.7/cloud/x86_64/images/AlmaLinux-8-GenericCloud-latest.x86_64.qcow2
+create_template 5001 "alma-8.7" "AlmaLinux-8-GenericCloud-latest.x86_64.qcow2"
