@@ -5,8 +5,8 @@ import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-ntfy_url = config.get('ntfy_url')
-ntfy_token = config.get('ntfy_token')
+ntfy_url = config.get('ntfy','url')
+ntfy_token = config.get('ntfy','token')
 
 requests.post(ntfy_url,
     data=f"{sys.argv[2]}",
