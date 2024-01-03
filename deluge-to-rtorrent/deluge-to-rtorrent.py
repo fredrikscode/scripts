@@ -8,7 +8,7 @@ import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
 
-torrent_limit = config.get('default', 'torrent_limit')
+torrent_limit = config.getint('default', 'torrent_limit')
 
 deluge_host = config.get('deluge', 'host')
 deluge_port = config.getint('deluge', 'port')
