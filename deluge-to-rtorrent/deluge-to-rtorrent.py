@@ -8,6 +8,8 @@ import configparser
 config = configparser.ConfigParser()
 config.read('config.ini')
 
+torrent_limit = config.get('default', 'torrent_limit')
+
 deluge_host = config.get('deluge', 'host')
 deluge_port = config.getint('deluge', 'port')
 deluge_username = config.get('deluge', 'username')
@@ -20,6 +22,9 @@ tracker_seed_requirements = {
     'Torrentleech': {'base_urls': ['https://tracker.torrentleech.org', 'https://tracker.tleechreload.org'], 'seeding_time': int(config.get('torrentleech', 'seeding_time'))},
     'Superbits': {'base_urls': ['https://superbits.org', 'https://sptracker.cc'], 'seeding_time': int(config.get('superbits', 'seeding_time'))},
 }
+
+deluge_client = DelugeRPCClient(deluge_host, deluge_port, deluge_username, deluge_password)
+rtorrent_client = xmlrpc.client.ServerProxy(rtorrent_url)
 
 def test_connection_to_deluge():
     try:
@@ -39,6 +44,17 @@ def test_connection_to_rtorrent():
 def get_base_url(url):
     parsed_url = urlparse(url)
     return f"{parsed_url.scheme}://{parsed_url.hostname}"
+
+def get_torrents_count():
+    try:
+        deluge_client.connect()
+        torrents_count = deluge_client.call('core.get_torrents_status', {}, ['name'])
+        return len(torrents_count)
+    except Exception as e:
+        print(f"Failed to get torrents count: {e}")
+        return 0
+    finally:
+        deluge_client.disconnect()
 
 def identify_matching_torrents():
     try:
@@ -103,20 +119,25 @@ def move_matching_torrents_to_rtorrent(matching_torrents):
                     if deluge_client.connected:
                         deluge_client.disconnect()
 
-deluge_client = DelugeRPCClient(deluge_host, deluge_port, deluge_username, deluge_password)
-rtorrent_client = xmlrpc.client.ServerProxy(rtorrent_url)
-
-if len(sys.argv) > 1 and sys.argv[1] == 'test':
-    print("Running in test mode...")
-    test_connection_to_deluge()
-    test_connection_to_rtorrent()
-else:
-    matching_torrents = identify_matching_torrents()
-    if matching_torrents:
-        print("Matching torrents that would be moved to rTorrent:")
-        for torrent_id, tracker_name, tracker_url in matching_torrents:
-            print(f"Torrent ID: {torrent_id}, Tracker: {tracker_name}, URL: {tracker_url}")
-
-        move_matching_torrents_to_rtorrent(matching_torrents)
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == 'test':
+        print("Running in test mode...")
+        test_connection_to_deluge()
+        test_connection_to_rtorrent()
     else:
-        print("No matching torrents found.")
+        current_torrent_count = get_torrents_count()
+        if current_torrent_count >= torrent_limit:
+            matching_torrents = identify_matching_torrents()
+            if matching_torrents:
+                #print("Matching torrents that would be moved to rTorrent:")
+                for torrent_id, tracker_name, tracker_url in matching_torrents:
+                    print(f"Torrent ID: {torrent_id}, Tracker: {tracker_name}, URL: {tracker_url}")
+
+                move_matching_torrents_to_rtorrent(matching_torrents)
+            else:
+                print("No torrent matched the criteria.")
+        else:
+            print(f"Torrent count {current_torrent_count} is below the limit {torrent_limit}")
+
+if __name__ == "__main__":
+    main()
